@@ -24,17 +24,18 @@ public class CreateTests {
             tests.add(test);
         }
 
-        PrintWriter pw = new PrintWriter(new File(args[0] + "_" + n + "_" + dMax + "_" + ".in"));
-        pw.println(tests.size());
-        for (int i = 0; i < tests.size(); ++i) {
-            int d = dMin + i;
-            pw.println("Test "+ i);
-            pw.println(n + " " + d);
-            for (int j = 0; j < n; ++j) {
-                for (int k = 0; k < d; ++k) {
-                    pw.print(tests.get(i)[j][k] + " ");
+        try (PrintWriter pw = new PrintWriter(new File(args[0] + "_" + n + "_" + dMax + ".in"))) {
+            pw.println(tests.size());
+            for (int i = 0; i < tests.size(); ++i) {
+                int d = dMin + i;
+                pw.println("Test " + i);
+                pw.println(n + " " + d);
+                for (int j = 0; j < n; ++j) {
+                    for (int k = 0; k < d; ++k) {
+                        pw.print(tests.get(i)[j][k] + " ");
+                    }
+                    pw.println();
                 }
-                pw.println();
             }
         }
     }
@@ -47,7 +48,6 @@ public class CreateTests {
         }
     }
 
-    //args[4] = 2
     private static void fillUniformCorrelated(Random random, double[][] test, int n, int d) {
         int i = 0; //TODO: what to do if only one test for each d?
         int x = i % 2 == 0 ? 1 : d - 2;
