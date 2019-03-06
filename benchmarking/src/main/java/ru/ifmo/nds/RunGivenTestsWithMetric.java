@@ -5,6 +5,7 @@ import ru.ifmo.nds.jfb.SplitMergeMetricA;
 import ru.ifmo.nds.jfb.SplitMergeMetricB;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.*;
@@ -16,14 +17,61 @@ public class RunGivenTestsWithMetric {
     private static final Map<SizeDim, AverageCount> ndTimeBMed = new HashMap<>();
 
     private static final int runCount = 5;
+    private static void printRStatForFile(PrintWriter pw, String filename) {
+        pw.println("data<-read.csv(\""+ filename +"\", header = TRUE)\n" +
+                "plot(res ~ size, data, main = 'data distribution', pch = 1)\n" +
+                "expn <- lm(log(res) ~ log(size), data)\n" +
+                "coef(expn)\n" +
+                "nlogn <- lm(log(res) ~ log(size) + log(log(size)), data)\n" +
+                "coef(nlogn)\n");
 
-    private static void printMetricsMap(Map<SizeDim, AverageCount> metricsMap, PrintWriter pw) {
-        for (SizeDim sizeDim : metricsMap.keySet()) {
-            pw.println(sizeDim.size + " " + sizeDim.dim + " " + metricsMap.get(sizeDim).average);
+    }
+
+    private static void printMetricsMapForR(Map<SizeDim, AverageCount> metricsMap, String filename) throws FileNotFoundException {
+        List<SizeDim> data = new ArrayList<>(metricsMap.keySet());
+        data.sort(SizeDim.dimComparator);
+        String curFilename = filename + "_dim_" + data.get(0).dim + ".out";
+        try (PrintWriter pwRStat = new PrintWriter(new File(filename+".R"))) {
+            PrintWriter pw = new PrintWriter(new File(curFilename));
+            SizeDim sizeDim = data.get(0);
+            pw.println("size,dim,res");
+            pw.println(sizeDim.size + "," + sizeDim.dim + "," + metricsMap.get(sizeDim).average);
+            for (int i = 1; i < data.size(); ++i) {
+                if (data.get(i).dim != data.get(i - 1).dim) {
+                    printRStatForFile(pwRStat, curFilename);
+                    curFilename = filename + "_dim_" + data.get(i).dim + ".out";
+                    pw.close();
+                    pw = new PrintWriter(curFilename);
+                    pw.println("size,dim,res");
+                }
+                sizeDim = data.get(i);
+                pw.println(sizeDim.size + "," + sizeDim.dim + "," + metricsMap.get(sizeDim).average);
+
+            }
+            pw.close();
+            printRStatForFile(pwRStat, curFilename);
+            pwRStat.flush();
+        }
+        try (PrintWriter pw = new PrintWriter(new File(filename + ".out"))) {
+
+            for (SizeDim sizeDim : data) {
+                pw.println(sizeDim.size + " " + sizeDim.dim + " " + metricsMap.get(sizeDim).average);
+            }
         }
     }
 
-    private static void run(JFBBase[] sorting, List<double[][]> tests, List<int[]> ranks, PrintWriter pw) {
+    private static void printMetricsMap(Map<SizeDim, AverageCount> metricsMap, String filename) throws FileNotFoundException {
+        try (PrintWriter pw = new PrintWriter(new File(filename + ".out"))) {
+            List<SizeDim> data = new ArrayList<>(metricsMap.keySet());
+            data.sort(SizeDim.sizeComparator);
+
+            for (SizeDim sizeDim : data) {
+                pw.println(sizeDim.size + " " + sizeDim.dim + " " + metricsMap.get(sizeDim).average);
+            }
+        }
+    }
+
+    private static void run(JFBBase[] sorting, List<double[][]> tests, List<int[]> ranks, String filename) throws IOException {
         int curRun = 0;
         for (int rc = 0; rc < runCount; rc++) {
             long t0 = System.nanoTime();
@@ -42,11 +90,9 @@ public class RunGivenTestsWithMetric {
             long time = System.nanoTime() - t0;
             System.out.println("Time " + (time / 1e9) + " s, checksum " + sum);
         }
-        pw.println("Metrics A");
-        printMetricsMap(ndTimeAMed, pw);
-        pw.println("Metrics B");
-        printMetricsMap(ndTimeBMed, pw);
-        pw.flush();
+
+        printMetricsMapForR(ndTimeAMed,filename + "_metricA");
+        printMetricsMapForR(ndTimeBMed, filename + "_metricB");
     }
 
     private static void calcA(List<SplitMergeMetricA> splitMergeMetricA) {
@@ -110,9 +156,7 @@ public class RunGivenTestsWithMetric {
 
     public static void main(String[] args) throws IOException {
         Locale.setDefault(Locale.US);
-        try (Scanner in = new Scanner(new File(args[0] + ".in"));
-             PrintWriter pw = new PrintWriter(new File(args[0] + ".out"))
-        ) {
+        try (Scanner in = new Scanner(new File(args[0] + ".in"))) {
             int testCount = in.nextInt();
             NonDominatedSortingFactory<JFBBase> factory = IdCollection.getNonDominatedSortingFactory(args[1]);
             List<int[]> ranks = new ArrayList<>(testCount);
@@ -134,7 +178,7 @@ public class RunGivenTestsWithMetric {
                 sorting[i] = factory.getInstance(n, d);
                 ranks.add(new int[n]);
             }
-            run(sorting, tests, ranks, pw);
+            run(sorting, tests, ranks, args[0]);
         }
     }
 }
@@ -161,6 +205,10 @@ class SizeDim {
     public int hashCode() {
         return Objects.hash(size, dim);
     }
+
+    public static Comparator<SizeDim> sizeComparator = Comparator.comparingInt(e -> e.size);
+
+    public static Comparator<SizeDim> dimComparator = Comparator.comparingInt(e -> e.dim);
 }
 
 class AverageCount {
