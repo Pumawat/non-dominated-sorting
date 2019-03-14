@@ -15,39 +15,34 @@ import ru.ifmo.nds.util.ArraySorter;
 @Timeout(time = 10)
 @Warmup(time = 1, iterations = 6)
 @Measurement(time = 1, iterations = 2)
-@Fork(value = 3)
-public class LexSortBenchmark {
-    @Param({"3", "10", "17", "31", "56", "100", "177", "316", "1000", "10000", "100000"})
+@Fork(value = 5)
+public class SortIndicesByValuesBenchmark {
+    @Param({"1", "2", "3", "4", "5", "7", "10", "13", "17", "23",
+            "31", "42", "56", "74", "100", "133", "177", "237", "316"})
     private int size;
 
-    @Param({"2", "5", "20"})
-    private int dimension;
-
-    private double[][][] data;
+    private int[][] data;
     private int[] indices;
-    private ArraySorter sorter;
 
     @Setup
     public void initialize() {
-        int nInstances = 10;
+        int nInstances = 100;
         Random random = new Random(size * 318325462111L);
-        data = new double[nInstances][size][dimension];
+        data = new int[nInstances][size];
         for (int i = 0; i < nInstances; ++i) {
             for (int j = 0; j < size; ++j) {
-                for (int k = 0; k < dimension; ++k) {
-                    data[i][j][k] = random.nextDouble();
-                }
+                data[i][j] = random.nextInt();
             }
         }
         indices = new int[size];
-        sorter = new ArraySorter(size);
     }
 
+    @OperationsPerInvocation(100)
     @Benchmark
     public void run(Blackhole bh) {
-        for (double[][] instance : data) {
+        for (int[] instance : data) {
             ArrayHelper.fillIdentity(indices, size);
-            sorter.lexicographicalSort(instance, indices, 0, size, dimension - 1);
+            ArraySorter.sortIndicesByValues(indices, instance, 0, size);
         }
     }
 }

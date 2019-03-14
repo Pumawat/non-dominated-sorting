@@ -5,6 +5,7 @@ import java.util.Arrays;
 import ru.ifmo.nds.NonDominatedSorting;
 import ru.ifmo.nds.util.ArrayHelper;
 import ru.ifmo.nds.util.ArraySorter;
+import ru.ifmo.nds.util.DominanceHelper;
 
 public class ENS_NDT_Arrays extends NonDominatedSorting {
     private SplitBuilder splitBuilder;
@@ -17,10 +18,13 @@ public class ENS_NDT_Arrays extends NonDominatedSorting {
 
     public ENS_NDT_Arrays(int maximumPoints, int maximumDimension) {
         super(maximumPoints, maximumDimension);
-        this.splitBuilder = new SplitBuilder(maximumPoints);
-        this.ranks = new int[maximumPoints];
-        this.transposedPoints = new double[maximumDimension][maximumPoints];
-        this.points = new double[maximumPoints][];
+        ranks = new int[maximumPoints];
+        transposedPoints = new double[maximumDimension][];
+        for (int d = 1; d < maximumDimension; ++d) {
+            transposedPoints[d] = new double[maximumPoints];
+        }
+        splitBuilder = new SplitBuilder(transposedPoints, maximumPoints, 2);
+        points = new double[maximumPoints][];
 
         // We need to have:
         // - N nodes for roots of layers
@@ -28,7 +32,7 @@ public class ENS_NDT_Arrays extends NonDominatedSorting {
         // - N nodes for internal nodes
         // in total 3 * N nodes.
         // We have two cells per node, this is why 6.
-        this.nodeArray = new int[maximumPoints * 6];
+        nodeArray = new int[maximumPoints * 6];
     }
 
     @Override
@@ -48,33 +52,37 @@ public class ENS_NDT_Arrays extends NonDominatedSorting {
     private void add(int node, int index, Split split) {
         double[] point = points[index];
         while (true) {
-            int v1 = nodeArray[2 * node];
-            int v2 = nodeArray[2 * node + 1];
+            int v1 = nodeArray[node];
+            int v2 = nodeArray[node + 1];
             if (v1 >= 0) {
                 if (v1 == 0) {
-                    nodeArray[2 * node] = index + 1;
+                    nodeArray[node] = index + 1;
                     break;
                 } else if (v2 == 0) {
-                    nodeArray[2 * node + 1] = index + 1;
+                    nodeArray[node + 1] = index + 1;
                     break;
                 } else {
-                    int goodNode = nNodes++;
-                    int weakNode = nNodes++;
-                    Arrays.fill(nodeArray, 2 * goodNode, 2 * weakNode + 2, 0);
+                    int goodNode = 2 * nNodes;
+                    int weakNode = 2 * ++nNodes;
+                    ++nNodes;
+                    nodeArray[goodNode] = 0;
+                    nodeArray[goodNode + 1] = 0;
+                    nodeArray[weakNode] = 0;
+                    nodeArray[weakNode + 1] = 0;
                     int coordinate = split.coordinate;
                     double value = split.value;
-                    if (points[v1 - 1][coordinate] < value) {
-                        add(goodNode, v1 - 1, split.good);
+                    if (points[--v1][coordinate] < value) {
+                        add(goodNode, v1, split.good);
                     } else {
-                        add(weakNode, v1 - 1, split.weak);
+                        add(weakNode, v1, split.weak);
                     }
-                    if (points[v2 - 1][coordinate] < value) {
-                        add(goodNode, v2 - 1, split.good);
+                    if (points[--v2][coordinate] < value) {
+                        add(goodNode, v2, split.good);
                     } else {
-                        add(weakNode, v2 - 1, split.weak);
+                        add(weakNode, v2, split.weak);
                     }
-                    nodeArray[2 * node] = -goodNode - 1;
-                    nodeArray[2 * node + 1] = -weakNode - 1;
+                    nodeArray[node] = -goodNode - 1;
+                    nodeArray[node + 1] = -weakNode - 1;
                     if (point[coordinate] < value) {
                         node = goodNode;
                         split = split.good;
@@ -95,28 +103,19 @@ public class ENS_NDT_Arrays extends NonDominatedSorting {
         }
     }
 
-    private boolean dominates(int good, int weak) {
-        double[] goodPoint = points[good];
-        double[] weakPoint = points[weak];
-        // objective 0 is not compared since points are presorted.
-        for (int o = goodPoint.length - 1; o > 0; --o) {
-            if (goodPoint[o] > weakPoint[o]) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private boolean dominates(int node, int index, Split split) {
-        int v1 = nodeArray[2 * node];
-        int v2 = nodeArray[2 * node + 1];
+    private boolean dominates(int node, double[] point, Split split) {
+        int v1 = nodeArray[node];
+        int v2 = nodeArray[node + 1];
         if (v1 < 0) {
             // Branching node
-            return dominates(-v1 - 1, index, split.good) ||
-                    points[index][split.coordinate] >= split.value && dominates(-v2 - 1, index, split.weak);
+            return dominates(-v1 - 1, point, split.good) ||
+                    point[split.coordinate] >= split.value && dominates(-v2 - 1, point, split.weak);
         } else {
             // Terminal node
-            return v1 > 0 && (dominates(v1 - 1, index) || v2 > 0 && dominates(v2 - 1, index));
+            if (v1 == 0) return false;
+            int maxObj = point.length - 1;
+            if (DominanceHelper.strictlyDominatesAssumingLexicographicallySmaller(points[v1 - 1], point, maxObj)) return true;
+            return v2 > 0 && DominanceHelper.strictlyDominatesAssumingLexicographicallySmaller(points[v2 - 1], point, maxObj);
         }
     }
 
@@ -132,22 +131,23 @@ public class ENS_NDT_Arrays extends NonDominatedSorting {
         Arrays.fill(this.nodeArray, 0, 2 * newN, 0);
 
         for (int i = 0; i < newN; ++i) {
-            for (int j = 0; j < dim; ++j) {
+            for (int j = 1; j < dim; ++j) {
                 transposedPoints[j][i] = this.points[i][j];
             }
         }
 
-        Split split = splitBuilder.result(transposedPoints, newN, dim, 2);
+        Split split = splitBuilder.result(newN, dim);
 
         int maxRank = 1;
         nNodes = newN;
         add(0, 0, split);
         for (int i = 1; i < newN; ++i) {
-            if (dominates(0, i, split)) {
+            double[] pt = this.points[i];
+            if (dominates(0, pt, split)) {
                 int left = 0, right = maxRank;
                 while (right - left > 1) {
                     int mid = (left + right) >>> 1;
-                    if (dominates(mid, i, split)) {
+                    if (dominates(mid << 1, pt, split)) {
                         left = mid;
                     } else {
                         right = mid;
@@ -156,7 +156,7 @@ public class ENS_NDT_Arrays extends NonDominatedSorting {
                 int rank = left + 1;
                 this.ranks[i] = rank;
                 if (rank <= maximalMeaningfulRank) {
-                    add(rank, i, split);
+                    add(rank << 1, i, split);
                     if (rank == maxRank) {
                         ++maxRank;
                     }

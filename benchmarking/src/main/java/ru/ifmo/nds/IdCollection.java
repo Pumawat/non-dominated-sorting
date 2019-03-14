@@ -55,29 +55,27 @@ public final class IdCollection {
                     "dominance.tree.nopresort." + mergeString,
                     DominanceTree.getNoPresortInsertion(isMergeRecursive)
             );
-            addNonDominatedSortingFactory(
-                    "dominance.tree.presort." + mergeString + ".nodelayed",
-                    DominanceTree.getPresortInsertion(isMergeRecursive, DominanceTree.InsertionOption.NO_DELAYED_INSERTION)
-            );
-            addNonDominatedSortingFactory(
-                    "dominance.tree.presort." + mergeString + ".delayed.recconcat",
-                    DominanceTree.getPresortInsertion(isMergeRecursive, DominanceTree.InsertionOption.DELAYED_INSERTION_RECURSIVE_CONCATENATION)
-            );
-            addNonDominatedSortingFactory(
-                    "dominance.tree.presort." + mergeString + ".delayed.seqconcat",
-                    DominanceTree.getPresortInsertion(isMergeRecursive, DominanceTree.InsertionOption.DELAYED_INSERTION_SEQUENTIAL_CONCATENATION)
-            );
+            for (boolean useDelayedInsertion: new boolean[] { false, true }) {
+                String delayedString = useDelayedInsertion ? ".nodelayed" : ".delayed";
+                addNonDominatedSortingFactory(
+                        "dominance.tree.presort." + mergeString + delayedString,
+                        DominanceTree.getPresortInsertion(isMergeRecursive, useDelayedInsertion)
+                );
+            }
         }
 
         addNonDominatedSortingFactory("ens.bs", ENS.getENS_BS());
         addNonDominatedSortingFactory("ens.ss", ENS.getENS_SS());
 
         StringTokenizer ndtThresholdsTok = new StringTokenizer(ndtThresholds, ",");
-        while (ndtThresholdsTok.hasMoreTokens()) {
-            int threshold = Integer.parseInt(ndtThresholdsTok.nextToken());
+        int[] ndtThresholds = new int[ndtThresholdsTok.countTokens()];
+        for (int i = 0; ndtThresholdsTok.hasMoreTokens(); ++i) {
+            ndtThresholds[i] = Integer.parseInt(ndtThresholdsTok.nextToken());
+        }
+        for (int threshold : ndtThresholds) {
             addNonDominatedSortingFactory("ens.ndt." + threshold, ENS.getENS_NDT(threshold));
             addNonDominatedSortingFactory("ens.ndt.one.tree." + threshold, ENS.getENS_NDT_OneTree(threshold));
-            addNonDominatedSortingFactory("jfb.rbtree.hybrid.ndt." + threshold, JensenFortinBuzdalov.getRedBlackTreeSweepHybridNDTImplementation(threshold));
+            addNonDominatedSortingFactory("jfb.rbtree.hybrid.ndt." + threshold, JensenFortinBuzdalov.getRedBlackTreeSweepHybridNDTImplementation(threshold, 1));
             addNonDominatedSortingFactory("jfb.veb.hybrid.ndt." + threshold, JensenFortinBuzdalov.getVanEmdeBoasHybridNDTImplementation(threshold));
         }
 
@@ -94,6 +92,9 @@ public final class IdCollection {
             addNonDominatedSortingFactory("jfb.rbtree.th" + threads, JensenFortinBuzdalov.getRedBlackTreeSweepImplementation(threads));
             addNonDominatedSortingFactory("jfb.rbtree.hybrid.fnds.th" + threads, JensenFortinBuzdalov.getRedBlackTreeSweepHybridFNDSImplementation(threads));
             addNonDominatedSortingFactory("jfb.rbtree.hybrid.ens.th" + threads, JensenFortinBuzdalov.getRedBlackTreeSweepHybridENSImplementation(threads));
+            for (int threshold : ndtThresholds) {
+                addNonDominatedSortingFactory("jfb.rbtree.hybrid.ndt." + threshold + ".th" + threads, JensenFortinBuzdalov.getRedBlackTreeSweepHybridNDTImplementation(threshold, threads));
+            }
         }
         addNonDominatedSortingFactory("jfb.veb", JensenFortinBuzdalov.getVanEmdeBoasImplementation());
         addNonDominatedSortingFactory("jfb.veb.hybrid.ens", JensenFortinBuzdalov.getVanEmdeBoasHybridENSImplementation());

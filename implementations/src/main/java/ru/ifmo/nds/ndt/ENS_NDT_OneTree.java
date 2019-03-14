@@ -8,7 +8,6 @@ import java.util.Arrays;
 
 public class ENS_NDT_OneTree extends NonDominatedSorting {
     private SplitBuilder splitBuilder;
-    private TreeRankNode tree;
     private int[] ranks;
     private double[][] transposedPoints;
     private double[][] points;
@@ -17,11 +16,13 @@ public class ENS_NDT_OneTree extends NonDominatedSorting {
     public ENS_NDT_OneTree(int maximumPoints, int maximumDimension, int threshold) {
         super(maximumPoints, maximumDimension);
         this.threshold = threshold;
-        this.splitBuilder = new SplitBuilder(maximumPoints);
-        this.tree = TreeRankNode.EMPTY;
-        this.ranks = new int[maximumPoints];
-        this.transposedPoints = new double[maximumDimension][maximumPoints];
-        this.points = new double[maximumPoints][];
+        ranks = new int[maximumPoints];
+        transposedPoints = new double[maximumDimension][];
+        for (int d = 1; d < maximumDimension; ++d) {
+            transposedPoints[d] = new double[maximumPoints];
+        }
+        splitBuilder = new SplitBuilder(transposedPoints, maximumPoints, threshold);
+        points = new double[maximumPoints][];
     }
 
     @Override
@@ -32,7 +33,6 @@ public class ENS_NDT_OneTree extends NonDominatedSorting {
     @Override
     protected void closeImpl() {
         splitBuilder = null;
-        tree = null;
         ranks = null;
         transposedPoints = null;
         points = null;
@@ -48,19 +48,19 @@ public class ENS_NDT_OneTree extends NonDominatedSorting {
         int newN = ArraySorter.retainUniquePoints(points, indices, this.points, ranks);
         Arrays.fill(this.ranks, 0, newN, 0);
 
-        tree = TreeRankNode.EMPTY;
+        TreeRankNode tree = threshold == 1 ? TreeRankNode.EMPTY_1 : TreeRankNode.EMPTY;
         for (int i = 0; i < newN; ++i) {
-            for (int j = 0; j < dim; ++j) {
+            for (int j = 1; j < dim; ++j) {
                 transposedPoints[j][i] = this.points[i][j];
             }
         }
 
-        Split split = splitBuilder.result(transposedPoints, newN, dim, threshold);
+        Split split = splitBuilder.result(newN, dim);
 
         tree = tree.add(this.points[0], 0, split, threshold);
         for (int i = 1; i < newN; ++i) {
             double[] current = this.points[i];
-            this.ranks[i] = tree.evaluateRank(current, 0, split, dim);
+            this.ranks[i] = tree.evaluateRank(current, 0, split, dim - 1);
             if (this.ranks[i] <= maximalMeaningfulRank) {
                 tree = tree.add(current, this.ranks[i], split, threshold);
             }

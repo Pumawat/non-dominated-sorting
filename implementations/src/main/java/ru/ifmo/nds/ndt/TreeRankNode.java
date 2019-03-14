@@ -1,13 +1,16 @@
 package ru.ifmo.nds.ndt;
 
+import ru.ifmo.nds.util.DominanceHelper;
+
 public abstract class TreeRankNode {
     public abstract TreeRankNode add(double[] point, int rank, Split split, int splitThreshold);
 
-    public abstract int evaluateRank(double[] point, int rank, Split split, int M);
+    public abstract int evaluateRank(double[] point, int rank, Split split, int maxObj);
 
     protected abstract int getMaxRank();
 
     public static final TreeRankNode EMPTY = new EmptyRankNode();
+    public static final TreeRankNode EMPTY_1 = new EmptyRankNode1();
 
     private static class EmptyRankNode extends TreeRankNode {
         @Override
@@ -16,12 +19,29 @@ public abstract class TreeRankNode {
         }
 
         @Override
-        public int evaluateRank(double[] point, int rank, Split split, int M) {
+        public int evaluateRank(double[] point, int rank, Split split, int maxObj) {
             return rank;
         }
 
         @Override
-        public int getMaxRank() {
+        protected int getMaxRank() {
+            return -1;
+        }
+    }
+
+    private static class EmptyRankNode1 extends TreeRankNode {
+        @Override
+        public TreeRankNode add(double[] point, int rank, Split split, int splitThreshold) {
+            return new TerminalRankNode1().add(point, rank, split, splitThreshold);
+        }
+
+        @Override
+        public int evaluateRank(double[] point, int rank, Split split, int maxObj) {
+            return rank;
+        }
+
+        @Override
+        protected int getMaxRank() {
             return -1;
         }
     }
@@ -44,11 +64,11 @@ public abstract class TreeRankNode {
                 if (points == null) {
                     points = new double[1][];
                     ranks = new int[1];
-                    size = 1;
                 }
                 points[0] = point;
                 maxRank = Math.max(maxRank, rank);
                 ranks[0] = maxRank;
+                size = 1;
                 return this;
             }
 
@@ -58,25 +78,31 @@ public abstract class TreeRankNode {
             }
 
             if (size == points.length) {
-                TerminalRankNode weak = new TerminalRankNode();
                 TerminalRankNode good = new TerminalRankNode();
-                // actually, nulls are perfect here,
-                // but we will not hurt the hearts of those who suffered from NPE
                 Split weakSplit = split.weak, goodSplit = split.good;
                 int obj = split.coordinate;
                 double median = split.value;
-                for (int i = 0; i < size; ++i) {
-                    if (points[i][obj] < median) {
-                        good.add(points[i], ranks[i], goodSplit, splitThreshold);
+                int oldSize = size;
+                maxRank = 0;
+                size = 0;
+                for (int i = 0; i < oldSize; ++i) {
+                    double[] pi = points[i];
+                    int ri = ranks[i];
+                    points[i] = null;
+                    if (pi[obj] < median) {
+                        good.add(pi, ri, goodSplit, splitThreshold);
                     } else {
-                        weak.add(points[i], ranks[i], weakSplit, splitThreshold);
+                        points[size] = pi;
+                        ranks[size] = ri;
+                        maxRank = Math.max(maxRank, ri);
+                        if (size == 0 || weakSplit != Split.NULL_MAX_DEPTH) {
+                            ++size;
+                        }
                     }
                 }
-                TreeRankNode rv = new BranchingRankNode(good, weak);
-                return rv.add(point, rank, split, splitThreshold);
+                return new BranchingRankNode(good, this).add(point, rank, split, splitThreshold);
             } else {
-                size++;
-                for (int i = size - 1; i >= 0; --i) {
+                for (int i = size; i >= 0; --i) {
                     if (i == 0 || ranks[i - 1] <= rank) {
                         points[i] = point;
                         ranks[i] = rank;
@@ -86,6 +112,7 @@ public abstract class TreeRankNode {
                         ranks[i] = ranks[i - 1];
                     }
                 }
+                ++size;
                 maxRank = Math.max(maxRank, rank);
 
                 return this;
@@ -93,25 +120,15 @@ public abstract class TreeRankNode {
         }
 
         @Override
-        public int evaluateRank(double[] point, int rank, Split split, int M) {
+        public int evaluateRank(double[] point, int rank, Split split, int maxObj) {
             if (maxRank < rank) {
                 return rank;
             }
-
             for (int i = size - 1; i >= 0; --i) {
-                double[] current = points[i];
                 if (ranks[i] < rank) {
                     return rank;
                 }
-                boolean dominates = true;
-                // objective 0 is not compared since points are presorted.
-                for (int o = M - 1; o > 0; --o) {
-                    if (current[o] > point[o]) {
-                        dominates = false;
-                        break;
-                    }
-                }
-                if (dominates) {
+                if (DominanceHelper.strictlyDominatesAssumingLexicographicallySmaller(points[i], point, maxObj)) {
                     return ranks[i] + 1;
                 }
             }
@@ -121,6 +138,55 @@ public abstract class TreeRankNode {
         @Override
         protected int getMaxRank() {
             return maxRank;
+        }
+    }
+
+    private static class TerminalRankNode1 extends TreeRankNode {
+        private double[] point;
+        private int rank;
+
+        private TerminalRankNode1() {
+            this.point = null;
+            this.rank = -1;
+        }
+
+        @Override
+        public TreeRankNode add(double[] point, int rank, Split split, int splitThreshold) {
+            if (split == Split.NULL_MAX_DEPTH) {
+                this.point = point;
+                this.rank = Math.max(this.rank, rank);
+                return this;
+            }
+
+            if (this.point != null) {
+                TerminalRankNode1 good = new TerminalRankNode1();
+                Split goodSplit = split.good;
+                int obj = split.coordinate;
+                double median = split.value;
+                if (this.point[obj] < median) {
+                    good.add(this.point, this.rank, goodSplit, splitThreshold);
+                    this.point = null;
+                    this.rank = -1;
+                }
+                return new BranchingRankNode(good, this).add(point, rank, split, splitThreshold);
+            } else {
+                this.point = point;
+                this.rank = rank;
+                return this;
+            }
+        }
+
+        @Override
+        public int evaluateRank(double[] point, int rank, Split split, int maxObj) {
+            if (this.rank >= rank && DominanceHelper.strictlyDominatesAssumingLexicographicallySmaller(this.point, point, maxObj)) {
+                return this.rank + 1;
+            }
+            return rank;
+        }
+
+        @Override
+        protected int getMaxRank() {
+            return rank;
         }
     }
 
@@ -146,15 +212,15 @@ public abstract class TreeRankNode {
         }
 
         @Override
-        public int evaluateRank(double[] point, int rank, Split split, int M) {
+        public int evaluateRank(double[] point, int rank, Split split, int maxObj) {
             if (maxRank < rank) {
                 return rank;
             }
             if (weak != null && point[split.coordinate] >= split.value) {
-                rank = weak.evaluateRank(point, rank, split.weak, M);
+                rank = weak.evaluateRank(point, rank, split.weak, maxObj);
             }
             if (good != null) {
-                rank = good.evaluateRank(point, rank, split.good, M);
+                rank = good.evaluateRank(point, rank, split.good, maxObj);
             }
             return rank;
         }
