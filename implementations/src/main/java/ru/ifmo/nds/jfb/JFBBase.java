@@ -203,7 +203,7 @@ public abstract class JFBBase extends NonDominatedSorting {
 
                     int res = splitMerge.mergeThree(indices, from, from, newStartMid, startMid, newStartRight, startRight, newUntil);
                     long endTime = System.nanoTime();
-                    splitMergeMetricAList.add(new SplitMergeMetricA(from, until, endTime - startTime));
+                    splitMergeMetricAList.add(new SplitMergeMetricA(from, until, endTime - startTime, obj + 1));
                     return res;
                 }
             }
@@ -368,7 +368,7 @@ public abstract class JFBBase extends NonDominatedSorting {
                             int res = splitMerge.mergeThree(indices, tempFrom,
                                     weakFrom, newWeakMidL, weakMidL, newWeakMidR, weakMidR, newWeakUntil);
                             long endTime = System.nanoTime();
-                            splitMergeMetricBList.add(new SplitMergeMetricB(goodFrom, goodUntil, weakFrom, weakUntil, endTime - startTime));
+                            splitMergeMetricBList.add(new SplitMergeMetricB(goodFrom, goodUntil, weakFrom, weakUntil, obj + 1, endTime - startTime));
                             return res;
                     }
 
