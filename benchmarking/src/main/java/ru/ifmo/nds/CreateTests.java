@@ -16,10 +16,16 @@ public class CreateTests {
 
         for (int i = dMin; i <= dMax; i++) {
             double[][] test = new double[n][i];
-            if (args[0].equals("hypercube")) {
-                fillUniformHypercube(random, test, n, i);
-            } else if (args[0].equals("correlated")) {
-                fillUniformCorrelated(random, test, n, i);
+            switch (args[0]) {
+                case "hypercube":
+                    fillUniformHypercube(random, test, n, i);
+                    break;
+                case "correlated":
+                    fillUniformCorrelated(random, test, n, i);
+                    break;
+                case "hyperplane":
+                    fillUniformHyperplane(random, test, n, i, args[4]); //args[4] is f: ("1", "2", "n/2", "n")
+                    break;
             }
             tests.add(test);
         }
@@ -59,4 +65,35 @@ public class CreateTests {
         Collections.shuffle(Arrays.asList(test), random);
         }
     }
+
+    private static void fillUniformHyperplane(Random random, double[][] test, int n, int d, String f) {
+        int realF;
+        if (f.equals("n")) {
+            realF = n;
+        } else if (f.startsWith("n/")) {
+            realF = n / Integer.parseInt(f.substring(2));
+        } else {
+            realF = Integer.parseInt(f);
+        }
+
+        int frontSize = n / realF;
+        int firstFrontSize = n - (realF - 1) * frontSize;
+
+        for (int i = 0; i < firstFrontSize; ++i) {
+            double sum = 1.0;
+            for (int j = d - 1; j > 0; --j) {
+                test[i][j] = sum * (1 - Math.pow(1 - random.nextDouble(), 1.0 / j));
+                sum -= test[i][j];
+            }
+            test[i][0] = sum;
+        }
+        for (int i = firstFrontSize; i < n; ++i) {
+            test[i] = test[i - frontSize].clone();
+            for (int j = 0; j < d; ++j) {
+                test[i][j] += 1e-9;
+            }
+        }
+        Collections.shuffle(Arrays.asList(test), random);
+    }
+
 }

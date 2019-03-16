@@ -1,5 +1,11 @@
 package ru.ifmo.nds.jfb;
 
+import ru.ifmo.nds.NonDominatedSorting;
+import ru.ifmo.nds.util.ArrayHelper;
+import ru.ifmo.nds.util.ArraySorter;
+import ru.ifmo.nds.util.DominanceHelper;
+import ru.ifmo.nds.util.SplitMergeHelper;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -8,9 +14,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.RecursiveAction;
 import java.util.concurrent.RecursiveTask;
-
-import ru.ifmo.nds.NonDominatedSorting;
-import ru.ifmo.nds.util.*;
 
 public abstract class JFBBase extends NonDominatedSorting {
     private static final int FORK_JOIN_THRESHOLD = 400;
@@ -175,6 +178,7 @@ public abstract class JFBBase extends NonDominatedSorting {
         } else {
             while (obj > 1) {
                 if (hybrid.helperAHookCondition(until - from, obj)) {
+//                    Deadline deadline = Deadline.fromNow(Duration.ofNanos((long)Math.exp(4.1 + 1.6 * Math.log(until - from))));
                     Deadline deadline = Deadline.fromNow(Duration.ofMinutes(5));
                     int result = hybrid.helperAHook(from, until, obj, maximalMeaningfulRank, deadline);
                     if (deadline.wasExceeded()) {
@@ -320,6 +324,7 @@ public abstract class JFBBase extends NonDominatedSorting {
             } else {
                 while (obj > 1) {
                     if (hybrid.helperBHookCondition(goodFrom, goodUntil, weakFrom, weakUntil, obj)) {
+//                        Deadline deadline = Deadline.fromNow(Duration.ofNanos((long)Math.exp(3.5 + 1.5 * Math.log(goodUntil - goodFrom + weakUntil - weakFrom))));
                         Deadline deadline = Deadline.fromNow(Duration.ofMinutes(5));
                         int result = hybrid.helperBHook(goodFrom, goodUntil, weakFrom, weakUntil, obj, tempFrom, maximalMeaningfulRank, deadline);
                         if (deadline.wasExceeded()) {

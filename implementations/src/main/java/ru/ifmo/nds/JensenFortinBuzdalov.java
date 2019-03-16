@@ -1,11 +1,12 @@
 package ru.ifmo.nds;
 
-import ru.ifmo.nds.jfb.*;
+import ru.ifmo.nds.jfb.JFBDouble;
+import ru.ifmo.nds.jfb.JFBInt;
 import ru.ifmo.nds.jfb.hybrid.Dummy;
 import ru.ifmo.nds.jfb.hybrid.ENS;
 import ru.ifmo.nds.jfb.hybrid.LinearNDS;
 import ru.ifmo.nds.jfb.hybrid.NDT;
-import ru.ifmo.nds.jfb.hybrid.ps.ConstParameterStrategy;
+import ru.ifmo.nds.jfb.hybrid.ps.ConstDecreaseParameterStrategyFactory;
 import ru.ifmo.nds.jfb.hybrid.ps.ParameterStrategyFactory;
 import ru.ifmo.nds.util.FenwickRankQueryStructureDouble;
 import ru.ifmo.nds.util.RedBlackRankQueryStructure;
@@ -39,7 +40,7 @@ public final class JensenFortinBuzdalov {
     }
 
     public static NonDominatedSortingFactory<JFBDouble> getRedBlackTreeSweepHybridENSImplementation(int allowedThreads) {
-        return (p, d) -> new JFBDouble(new RedBlackRankQueryStructure(p), d, allowedThreads, new ENS(100, 200, ParameterStrategyFactory.CONST, ParameterStrategyFactory.CONST));
+        return (p, d) -> new JFBDouble(new RedBlackRankQueryStructure(p), d, allowedThreads, new ENS(100, 200, new ConstDecreaseParameterStrategyFactory(0), new ConstDecreaseParameterStrategyFactory(0)));
     }
 
     public static NonDominatedSortingFactory<JFBDouble> getRedBlackTreeSweepHybridNDTImplementation(int threshold) {
