@@ -9,6 +9,8 @@ import ru.ifmo.nds.util.ArrayHelper;
 import ru.ifmo.nds.util.ArraySorter;
 import ru.ifmo.nds.util.DominanceHelper;
 
+import java.util.Arrays;
+
 public final class ENS extends HybridAlgorithmWrapper {
     private final int threshold3D;
     private final int thresholdAll;
@@ -44,6 +46,7 @@ public final class ENS extends HybridAlgorithmWrapper {
         private final int[] ranks;
         private final int[] indices;
         private final double[][] points;
+        private final double[][] exPoints;
 
         private int threshold3D;
         private int thresholdAll;
@@ -54,6 +57,7 @@ public final class ENS extends HybridAlgorithmWrapper {
             this.ranks = ranks;
             this.indices = indices;
             this.points = points;
+            this.exPoints = new double[points.length][];
             this.space = new int[STORAGE_MULTIPLE * indices.length];
             this.threshold3D = threshold3D;
             this.thresholdAll = thresholdAll;
@@ -165,10 +169,10 @@ public final class ENS extends HybridAlgorithmWrapper {
             }
         }
 
-        private boolean checkWhetherDominates(int[] array, int goodFrom, int goodUntil, double[] wp, int obj) {
+        private boolean checkWhetherDominates(int goodFrom, int goodUntil, double[] wp, int obj) {
             while (goodUntil > goodFrom) {
                 --goodUntil;
-                if (DominanceHelper.strictlyDominatesAssumingLexicographicallySmaller(points[array[goodUntil]], wp, obj)) {
+                if (DominanceHelper.strictlyDominatesAssumingLexicographicallySmaller(exPoints[goodUntil], wp, obj)) {
                     return true;
                 }
             }
@@ -176,21 +180,26 @@ public final class ENS extends HybridAlgorithmWrapper {
         }
 
         private int helperBSingleRank(int rank, int goodFrom, int goodUntil,
-                                      int weakFrom, int weakUntil, int obj, int maximalMeaningfulRank) {
+                                      int weakFrom, int weakUntil, int obj, int maximalMeaningfulRank, int tempFrom) {
             int minUpdated = weakUntil;
+            int offset = tempFrom - goodFrom;
+            for (int good = goodFrom; good < goodUntil; ++good) {
+                exPoints[offset + good] = points[indices[good]];
+            }
             for (int weak = weakFrom, good = goodFrom; weak < weakUntil; ++weak) {
                 int wi = indices[weak];
                 if (ranks[wi] > rank) {
                     continue;
                 }
                 good = ArrayHelper.findWhereNotSmaller(indices, good, goodUntil, wi);
-                if (checkWhetherDominates(indices, goodFrom, good, points[wi], obj)) {
+                if (checkWhetherDominates(tempFrom, good + offset, points[wi], obj)) {
                     ranks[wi] = rank + 1;
                     if (minUpdated > weak) {
                         minUpdated = weak;
                     }
                 }
             }
+            Arrays.fill(exPoints, tempFrom, tempFrom + goodUntil - goodFrom, null);
             return rank == maximalMeaningfulRank && minUpdated < weakUntil
                     ? JFBBase.kickOutOverflowedRanks(indices, ranks, maximalMeaningfulRank, minUpdated, weakUntil)
                     : weakUntil;
@@ -216,6 +225,7 @@ public final class ENS extends HybridAlgorithmWrapper {
             int sliceLast = sliceOffset - 2;
             int atSliceLast = 0;
             int prevRank = 1;
+            int sliceRankIndex = from - 1;
             for (int i = from; i < until; ++i) {
                 int currIndex = space[i];
                 int currRank = space[currIndex];
@@ -225,6 +235,7 @@ public final class ENS extends HybridAlgorithmWrapper {
                         space[sliceLast] = atSliceLast;
                         atSliceLast = 0;
                     }
+                    space[++sliceRankIndex] = currRank;
                     sliceLast += 2;
                 }
                 ++atSliceLast;
@@ -240,17 +251,18 @@ public final class ENS extends HybridAlgorithmWrapper {
             return sliceLast;
         }
 
-        private int findRankInSlices(int sliceOffset, int sliceLast, int wi, int obj) {
+        private int findRankInSlices(int sliceOffset, int sliceLast, int wi, int obj, int sliceRankOffset) {
             int currSlice = sliceLast;
+            int sliceRankIndex = ((currSlice - sliceOffset) >>> 1) + sliceRankOffset;
             int weakRank = ranks[wi];
             double[] wp = points[wi];
             while (currSlice >= sliceOffset) {
                 int from = space[currSlice];
                 int until = space[currSlice + 1];
                 if (from < until) {
-                    int currRank = ranks[space[until - 1]];
+                    int currRank = -space[sliceRankIndex];
                     if (currRank >= weakRank) {
-                        if (checkWhetherDominates(space, from, until, wp, obj)) {
+                        if (checkWhetherDominates(from, until, wp, obj)) {
                             weakRank = currRank + 1;
                         } else {
                             break;
@@ -258,6 +270,7 @@ public final class ENS extends HybridAlgorithmWrapper {
                     }
                 }
                 currSlice -= 2;
+                --sliceRankIndex;
             }
             return ranks[wi] = weakRank;
         }
@@ -269,7 +282,6 @@ public final class ENS extends HybridAlgorithmWrapper {
             int sortedIndicesOffset = tempFrom * STORAGE_MULTIPLE;
             int ranksAndSlicesOffset = sortedIndicesOffset + goodSize;
             int sliceOffset = ranksAndSlicesOffset + goodSize;
-            int pointsBySlicesOffset = sliceOffset + 2 * goodSize;
 
             int minRank = transplantRanksAndCheckWhetherAllAreSame(goodFrom, goodUntil, ranksAndSlicesOffset, sortedIndicesOffset, deadline);
             if (deadline.wasExceeded()) {
@@ -277,11 +289,11 @@ public final class ENS extends HybridAlgorithmWrapper {
             }
             if (minRank != 1) {
                 // "good" has a single front, let's do the simple stuff
-                return helperBSingleRank(-minRank, goodFrom, goodUntil, weakFrom, weakUntil, obj, maximalMeaningfulRank);
+                return helperBSingleRank(-minRank, goodFrom, goodUntil, weakFrom, weakUntil, obj, maximalMeaningfulRank, tempFrom);
             } else {
                 // "good" has multiple fronts (called "slices" here), need to go a more complicated way.
                 ArraySorter.sortIndicesByValues(space, space, sortedIndicesOffset, sortedIndicesOffset + goodSize);
-                int sliceLast = distributePointsBetweenSlices(space, sortedIndicesOffset, sortedIndicesOffset + goodSize, sliceOffset, pointsBySlicesOffset);
+                int sliceLast = distributePointsBetweenSlices(space, sortedIndicesOffset, sortedIndicesOffset + goodSize, sliceOffset, tempFrom);
                 int minOverflowed = weakUntil;
                 for (int weak = weakFrom, good = goodFrom, sliceOfGood = ranksAndSlicesOffset; weak < weakUntil && !deadline.isExceeded(); ++weak) {
                     int wi = indices[weak];
@@ -289,16 +301,17 @@ public final class ENS extends HybridAlgorithmWrapper {
                     while (good < goodUntil && (gi = indices[good]) < wi) {
                         int sliceTailIndex = space[sliceOfGood] + 1;
                         int spaceAtTail = space[sliceTailIndex];
-                        space[spaceAtTail] = gi;
+                        exPoints[spaceAtTail] = points[gi];
                         space[sliceTailIndex] = spaceAtTail + 1;
                         ++good;
                         ++sliceOfGood;
                     }
-                    int weakRank = findRankInSlices(sliceOffset, sliceLast, wi, obj);
+                    int weakRank = findRankInSlices(sliceOffset, sliceLast, wi, obj, sortedIndicesOffset);
                     if (weakRank > maximalMeaningfulRank && minOverflowed > weak) {
                         minOverflowed = weak;
                     }
                 }
+                Arrays.fill(exPoints, tempFrom, tempFrom + goodUntil - goodFrom, null);
                 if (deadline.wasExceeded()) {
                     return -1;
                 }

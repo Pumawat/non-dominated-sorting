@@ -9,13 +9,16 @@ public final class ArraySorter {
     private int coordinate = -1;
     private int maxCoordinate = -1;
 
-    private static final int INSERTION_SORT_THRESHOLD = 20;
+    private static final int INDICES_BY_VALUES_INSERTION_THRESHOLD = 47;
+    private static final int INDICES_BY_VALUES_INSERTION_THRESHOLD_ENTRY = 160;
+
+    private static final int INSERTION_LEX_SORT_THRESHOLD = 42;
 
     public ArraySorter(int maximumPoints) {
         this.scratch = new double[maximumPoints];
     }
 
-    private static int split(double[] scratch, int[] indices, int from, int until) {
+    private static long split(double[] scratch, int[] indices, int from, int until) {
         double pivot = scratch[(from + until) >>> 1];
         int l = from, r = until - 1;
         while (l <= r) {
@@ -30,42 +33,35 @@ public final class ArraySorter {
                 --r;
             }
         }
-        if (r + 1 == l) {
-            return l;
-        } else {
-            return -l - 1;
-        }
+        return ((long) (r) << 32) ^ l; // l is non-negative
     }
 
     private static void insertionSort(double[] scratch, int[] indices, int from, int until) {
         int to = until - 1;
-        for (int i = from, j = i; i < to; j = ++i) {
-            double ai = scratch[i + 1];
-            int ii = indices[i + 1];
-            while (ai < scratch[j]) {
-                scratch[j + 1] = scratch[j];
+        for (int i = from, j = i; i < to; j = i) {
+            double ai = scratch[++i], aj;
+            int ii = indices[i];
+            while (ai < (aj = scratch[j])) {
+                scratch[j + 1] = aj;
                 indices[j + 1] = indices[j];
-                if (j-- == from) {
+                if (--j < from) {
                     break;
                 }
             }
-            scratch[j + 1] = ai;
-            indices[j + 1] = ii;
+            scratch[++j] = ai;
+            indices[j] = ii;
         }
 
     }
 
     private void sortImplInside(int from, int until) {
-        if (from + INSERTION_SORT_THRESHOLD >= until) {
+        if (from + INSERTION_LEX_SORT_THRESHOLD >= until) {
             insertionSort(scratch, indices, from, until);
         } else {
-            int l = split(scratch, indices, from, until);
-            int r = l;
-            if (l < 0) {
-                l = -l - 1;
-                r = l - 1;
-            }
-            if (from + 1 < r) sortImplInside(from, r);
+            long pack = split(scratch, indices, from, until);
+            int l = (int) (pack);
+            int r = (int) (pack >> 32);
+            if (from < r) sortImplInside(from, r + 1);
             if (l + 1 < until) sortImplInside(l, until);
         }
     }
@@ -100,11 +96,16 @@ public final class ArraySorter {
         }
     }
 
-    public void compressCoordinates(double[] original, int[] indices, int[] target, int from, int until) {
+    private void checkSize(int from, int until) {
         if (until > scratch.length) {
             throw new IllegalArgumentException("The internal scratch array length is " + scratch.length
                     + ", but you requested from = " + from + " until = " + until + " which is " + (until - from));
         }
+    }
+
+    public void compressCoordinates(double[] original, int[] indices, int[] target, int from, int until) {
+        checkSize(from, until);
+
         System.arraycopy(original, from, scratch, from, until - from);
         for (int i = from; i < until; ++i) {
             indices[i] = i;
@@ -116,7 +117,7 @@ public final class ArraySorter {
         double prev = Double.NaN;
         for (int i = from, x = -1; i < until; ++i) {
             int ii = indices[i];
-            double curr = original[ii];
+            double curr = scratch[i];
             if (prev != curr) {
                 prev = curr;
                 ++x;
@@ -126,10 +127,7 @@ public final class ArraySorter {
     }
 
     public void sort(double[][] points, int[] indices, int from, int until, int whichCoordinate) {
-        if (until > scratch.length) {
-            throw new IllegalArgumentException("The internal scratch length is " + scratch.length
-                    + ", but you requested from = " + from + " until = " + until + " which is " + (until - from));
-        }
+        checkSize(from, until);
         this.points = points;
         this.indices = indices;
         this.coordinate = whichCoordinate;
@@ -142,10 +140,7 @@ public final class ArraySorter {
     }
 
     public void lexicographicalSort(double[][] points, int[] indices, int from, int until, int maxCoordinate) {
-        if (until > scratch.length) {
-            throw new IllegalArgumentException("The internal scratch array length is " + scratch.length
-                    + ", but you requested from = " + from + " until = " + until + " which is " + (until - from));
-        }
+        checkSize(from, until);
         this.points = points;
         this.indices = indices;
         this.maxCoordinate = maxCoordinate;
@@ -180,10 +175,8 @@ public final class ArraySorter {
     }
 
     public void sortComparingByIndicesIfEqual(double[][] points, int[] indices, int from, int until, int coordinate) {
-        if (until > scratch.length) {
-            throw new IllegalArgumentException("The internal scratch array length is " + scratch.length
-                    + ", but you requested from = " + from + " until = " + until + " which is " + (until - from));
-        }
+        checkSize(from, until);
+
         this.points = points;
         this.indices = indices;
         this.coordinate = coordinate;
@@ -206,7 +199,6 @@ public final class ArraySorter {
             int currII = sortedIndices[i];
             double[] currPoint = sourcePoints[currII];
             if (!ArrayHelper.equal(lastPoint, currPoint, dim)) {
-                // Copying the point to the internal array.
                 targetPoints[newN] = currPoint;
                 lastPoint = currPoint;
                 lastP = newN;
@@ -217,7 +209,7 @@ public final class ArraySorter {
         return newN;
     }
 
-    private static int splitIndicesByRanks(int[] indices, int[] values, int from, int until) {
+    private static long splitIndicesByRanks(int[] indices, int[] values, int from, int until) {
         int left = from, right = until - 1;
         int pivot = values[indices[(from + until) >>> 1]];
         int sl, sr;
@@ -231,16 +223,16 @@ public final class ArraySorter {
                 --right;
             }
         }
-        return left - 1 == right ? left : -left - 1;
+        return ((long) (right) << 32) ^ left; // left is non-negative
     }
 
     private static void insertionSortIndicesByValues(int[] indices, int[] values, int from, int to) {
-        for (int i = from, j = i; i < to; j = ++i) {
-            int ii = indices[i + 1];
+        for (int i = from, j = i; i < to; j = i) {
+            int ii = indices[++i], ij;
             int ai = values[ii];
-            while (ai < values[indices[j]]) {
-                indices[j + 1] = indices[j];
-                if (j-- == from) {
+            while (ai < values[ij = indices[j]]) {
+                indices[j + 1] = ij;
+                if (--j < from) {
                     break;
                 }
             }
@@ -248,22 +240,27 @@ public final class ArraySorter {
         }
     }
 
-    public static void sortIndicesByValues(int[] indices, int[] values, int from, int until) {
-        if (from + INSERTION_SORT_THRESHOLD > until) {
+    private static void sortIndicesByValuesImpl(int[] indices, int[] values, int from, int until) {
+        if (from + INDICES_BY_VALUES_INSERTION_THRESHOLD > until) {
             insertionSortIndicesByValues(indices, values, from, until - 1);
         } else {
-            int left = splitIndicesByRanks(indices, values, from, until);
-            int right = left;
-            if (left < 0) {
-                left = -left - 1;
-                right = left - 1;
-            }
-            if (from + 1 < right) {
-                sortIndicesByValues(indices, values, from, right);
+            long pack = splitIndicesByRanks(indices, values, from, until);
+            int left = (int) pack;
+            int right = (int) (pack >> 32);
+            if (from < right) {
+                sortIndicesByValuesImpl(indices, values, from, right + 1);
             }
             if (left + 1 < until) {
-                sortIndicesByValues(indices, values, left, until);
+                sortIndicesByValuesImpl(indices, values, left, until);
             }
+        }
+    }
+
+    public static void sortIndicesByValues(int[] indices, int[] values, int from, int until) {
+        if (from + INDICES_BY_VALUES_INSERTION_THRESHOLD_ENTRY > until) {
+            insertionSortIndicesByValues(indices, values, from, until - 1);
+        } else {
+            sortIndicesByValuesImpl(indices, values, from, until);
         }
     }
 }
