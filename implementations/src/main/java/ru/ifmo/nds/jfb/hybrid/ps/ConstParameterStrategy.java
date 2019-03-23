@@ -4,7 +4,12 @@ public enum ConstParameterStrategy implements ParameterStrategy {
     INSTANCE;
 
     @Override
-    public int next(int current) {
+    public int nextIfFailure(int current) {
+        return current;
+    }
+
+    @Override
+    public int nextIfSuccess(int current) {
         return current;
     }
 }

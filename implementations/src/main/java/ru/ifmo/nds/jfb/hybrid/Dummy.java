@@ -48,7 +48,12 @@ public final class Dummy extends HybridAlgorithmWrapper {
         }
 
         @Override
-        public void modify(int obj) {
+        public void modifyIfFailure(int obj) {
+            throw new UnsupportedOperationException("modify should never be called");
+        }
+
+        @Override
+        public void modifyIfSuccess(int obj) {
             throw new UnsupportedOperationException("modify should never be called");
         }
     };

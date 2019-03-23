@@ -8,8 +8,13 @@ public class ConstDecreaseParameterStrategy implements ParameterStrategy {
     }
 
     @Override
-    public int next(int current) {
+    public int nextIfFailure(int current) {
         int res = current - decreaseConst;
         return res <= 0 ? current : res;
+    }
+
+    @Override
+    public int nextIfSuccess(int current) {
+        return current;
     }
 }

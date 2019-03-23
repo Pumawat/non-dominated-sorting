@@ -178,12 +178,13 @@ public abstract class JFBBase extends NonDominatedSorting {
         } else {
             while (obj > 1) {
                 if (hybrid.helperAHookCondition(until - from, obj)) {
-//                    Deadline deadline = Deadline.fromNow(Duration.ofNanos((long)Math.exp(4.1 + 1.6 * Math.log(until - from))));
-                    Deadline deadline = Deadline.fromNow(Duration.ofMinutes(5));
+                    Deadline deadline = Deadline.fromNow(Duration.ofNanos((long)Math.exp(4.1 + 1.6 * Math.log(until - from))));
+//                    Deadline deadline = Deadline.fromNow(Duration.ofMinutes(5));
                     int result = hybrid.helperAHook(from, until, obj, maximalMeaningfulRank, deadline);
                     if (deadline.wasExceeded()) {
-                        hybrid.modify(obj);
+                        hybrid.modifyIfFailure(obj);
                     } else {
+                        hybrid.modifyIfSuccess(obj);
                         return result;
                     }
                 }
@@ -324,12 +325,13 @@ public abstract class JFBBase extends NonDominatedSorting {
             } else {
                 while (obj > 1) {
                     if (hybrid.helperBHookCondition(goodFrom, goodUntil, weakFrom, weakUntil, obj)) {
-//                        Deadline deadline = Deadline.fromNow(Duration.ofNanos((long)Math.exp(3.5 + 1.5 * Math.log(goodUntil - goodFrom + weakUntil - weakFrom))));
-                        Deadline deadline = Deadline.fromNow(Duration.ofMinutes(5));
+                        Deadline deadline = Deadline.fromNow(Duration.ofNanos((long)Math.exp(3.5 + 1.5 * Math.log(goodUntil - goodFrom + weakUntil - weakFrom))));
+//                        Deadline deadline = Deadline.fromNow(Duration.ofMinutes(5));
                         int result = hybrid.helperBHook(goodFrom, goodUntil, weakFrom, weakUntil, obj, tempFrom, maximalMeaningfulRank, deadline);
                         if (deadline.wasExceeded()) {
-                            hybrid.modify(obj);
+                            hybrid.modifyIfFailure(obj);
                         } else {
+                            hybrid.modifyIfSuccess(obj);
                             return result;
                         }
                     }

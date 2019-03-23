@@ -320,15 +320,28 @@ public final class ENS extends HybridAlgorithmWrapper {
         }
 
         @Override
-        public void modify(int obj) {
+        public void modifyIfFailure(int obj) {
             switch (obj) {
                 case 1:
                     break;
                 case 2:
-                    threshold3D = threshold3DStrategy.next(threshold3D);
+                    threshold3D = threshold3DStrategy.nextIfFailure(threshold3D);
                     break;
                 default:
-                    thresholdAll = thresholdAllStrategy.next(thresholdAll);
+                    thresholdAll = thresholdAllStrategy.nextIfFailure(thresholdAll);
+            }
+        }
+
+        @Override
+        public void modifyIfSuccess(int obj) {
+            switch (obj) {
+                case 1:
+                    break;
+                case 2:
+                    threshold3D = threshold3DStrategy.nextIfSuccess(threshold3D);
+                    break;
+                default:
+                    thresholdAll = thresholdAllStrategy.nextIfSuccess(thresholdAll);
             }
         }
     }

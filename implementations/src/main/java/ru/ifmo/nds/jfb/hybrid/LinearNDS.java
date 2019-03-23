@@ -76,7 +76,12 @@ public final class LinearNDS extends HybridAlgorithmWrapper {
         }
 
         @Override
-        public void modify(int obj) {
+        public void modifyIfFailure(int obj) {
+            // do nothing
+        }
+
+        @Override
+        public void modifyIfSuccess(int obj) {
             // do nothing
         }
     }
