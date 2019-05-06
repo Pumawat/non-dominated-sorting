@@ -5,16 +5,24 @@ import ru.ifmo.nds.jfb.JFBBase;
 import ru.ifmo.nds.util.ArrayHelper;
 import ru.ifmo.nds.util.ArraySorter;
 import ru.ifmo.nds.util.DominanceHelper;
+import ru.ifmo.nds.util.perfcount.PerformanceCounter;
 
 import java.util.Arrays;
+import java.util.function.Supplier;
 
 public final class ENS extends HybridAlgorithmWrapper {
     private final int threshold3D;
     private final int thresholdAll;
+    private final ThreadLocal<PerformanceCounter> counterFactory;
 
     public ENS(int threshold3D, int thresholdAll) {
+        this(threshold3D, thresholdAll, () -> PerformanceCounter.DUMMY);
+    }
+
+    public ENS(int threshold3D, int thresholdAll, Supplier<PerformanceCounter> counterFactory) {
         this.threshold3D = threshold3D;
         this.thresholdAll = thresholdAll;
+        this.counterFactory = ThreadLocal.withInitial(counterFactory);
     }
 
     @Override
@@ -29,7 +37,7 @@ public final class ENS extends HybridAlgorithmWrapper {
 
     @Override
     public HybridAlgorithmWrapper.Instance create(int[] ranks, int[] indices, double[][] points, double[][] transposedPoints) {
-        return new Instance(ranks, indices, points, threshold3D, thresholdAll);
+        return new Instance(ranks, indices, points, threshold3D, thresholdAll, counterFactory);
     }
 
     private static final class Instance extends HybridAlgorithmWrapper.Instance {
@@ -44,7 +52,10 @@ public final class ENS extends HybridAlgorithmWrapper {
         private final int threshold3D;
         private final int thresholdAll;
 
-        private Instance(int[] ranks, int[] indices, double[][] points, int threshold3D, int thresholdAll) {
+        private final ThreadLocal<PerformanceCounter> counterFactory;
+
+        private Instance(int[] ranks, int[] indices, double[][] points, int threshold3D, int thresholdAll,
+                         ThreadLocal<PerformanceCounter> counterFactory) {
             this.ranks = ranks;
             this.indices = indices;
             this.points = points;
@@ -52,6 +63,7 @@ public final class ENS extends HybridAlgorithmWrapper {
             this.space = new int[STORAGE_MULTIPLE * indices.length];
             this.threshold3D = threshold3D;
             this.thresholdAll = thresholdAll;
+            this.counterFactory = counterFactory;
         }
 
         private boolean notHookCondition(int size, int obj) {
@@ -145,18 +157,23 @@ public final class ENS extends HybridAlgorithmWrapper {
             return JFBBase.kickOutOverflowedRanks(indices, ranks, maximalMeaningfulRank, minOverflow, until);
         }
 
-        private boolean checkWhetherDominates(int goodFrom, int goodUntil, double[] wp, int obj) {
-            while (goodUntil > goodFrom) {
-                --goodUntil;
-                if (DominanceHelper.strictlyDominatesAssumingLexicographicallySmaller(exPoints[goodUntil], wp, obj)) {
+        private boolean checkWhetherDominates(int goodFrom, int goodUntil, double[] wp, int obj, PerformanceCounter counter) {
+            int curr = goodUntil;
+            while (curr > goodFrom) {
+                --curr;
+                if (DominanceHelper.strictlyDominatesAssumingLexicographicallySmaller(exPoints[curr], wp, obj)) {
+                    counter.record(goodUntil - curr);
                     return true;
                 }
             }
+            counter.record(goodUntil - curr);
             return false;
         }
 
         private int helperBSingleRank(int rank, int goodFrom, int goodUntil,
                                       int weakFrom, int weakUntil, int obj, int maximalMeaningfulRank, int tempFrom) {
+            PerformanceCounter counter = counterFactory.get();
+            counter.init(goodUntil - goodFrom + weakUntil - weakFrom, obj);
             int minUpdated = weakUntil;
             int offset = tempFrom - goodFrom;
             for (int good = goodFrom; good < goodUntil; ++good) {
@@ -168,13 +185,14 @@ public final class ENS extends HybridAlgorithmWrapper {
                     continue;
                 }
                 good = ArrayHelper.findWhereNotSmaller(indices, good, goodUntil, wi);
-                if (checkWhetherDominates(tempFrom, good + offset, points[wi], obj)) {
+                if (checkWhetherDominates(tempFrom, good + offset, points[wi], obj, counter)) {
                     ranks[wi] = rank + 1;
                     if (minUpdated > weak) {
                         minUpdated = weak;
                     }
                 }
             }
+            counter.release();
             Arrays.fill(exPoints, tempFrom, tempFrom + goodUntil - goodFrom, null);
             return rank == maximalMeaningfulRank && minUpdated < weakUntil
                     ? JFBBase.kickOutOverflowedRanks(indices, ranks, maximalMeaningfulRank, minUpdated, weakUntil)
@@ -227,7 +245,8 @@ public final class ENS extends HybridAlgorithmWrapper {
             return sliceLast;
         }
 
-        private int findRankInSlices(int sliceOffset, int sliceLast, int wi, int obj, int sliceRankOffset) {
+        private int findRankInSlices(int sliceOffset, int sliceLast, int wi, int obj, int sliceRankOffset,
+                                     PerformanceCounter counter) {
             int currSlice = sliceLast;
             int sliceRankIndex = ((currSlice - sliceOffset) >>> 1) + sliceRankOffset;
             int weakRank = ranks[wi];
@@ -238,7 +257,7 @@ public final class ENS extends HybridAlgorithmWrapper {
                 if (from < until) {
                     int currRank = -space[sliceRankIndex];
                     if (currRank >= weakRank) {
-                        if (checkWhetherDominates(from, until, wp, obj)) {
+                        if (checkWhetherDominates(from, until, wp, obj, counter)) {
                             weakRank = currRank + 1;
                         } else {
                             break;
@@ -268,6 +287,8 @@ public final class ENS extends HybridAlgorithmWrapper {
                 return helperBSingleRank(-minRank, goodFrom, goodUntil, weakFrom, weakUntil, obj, maximalMeaningfulRank, tempFrom);
             } else {
                 // "good" has multiple fronts (called "slices" here), need to go a more complicated way.
+                PerformanceCounter counter = counterFactory.get();
+                counter.init(goodSize + weakUntil - weakFrom, obj);
                 ArraySorter.sortIndicesByValues(space, space, sortedIndicesOffset, sortedIndicesOffset + goodSize);
                 int sliceLast = distributePointsBetweenSlices(space, sortedIndicesOffset, sortedIndicesOffset + goodSize, sliceOffset, tempFrom);
                 int minOverflowed = weakUntil;
@@ -282,11 +303,12 @@ public final class ENS extends HybridAlgorithmWrapper {
                         ++good;
                         ++sliceOfGood;
                     }
-                    int weakRank = findRankInSlices(sliceOffset, sliceLast, wi, obj, sortedIndicesOffset);
+                    int weakRank = findRankInSlices(sliceOffset, sliceLast, wi, obj, sortedIndicesOffset, counter);
                     if (weakRank > maximalMeaningfulRank && minOverflowed > weak) {
                         minOverflowed = weak;
                     }
                 }
+                counter.release();
                 Arrays.fill(exPoints, tempFrom, tempFrom + goodUntil - goodFrom, null);
                 return JFBBase.kickOutOverflowedRanks(indices, ranks, maximalMeaningfulRank, minOverflowed, weakUntil);
             }
