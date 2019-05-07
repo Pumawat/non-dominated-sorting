@@ -2,16 +2,17 @@ package ru.ifmo.nds.util.perfcount;
 
 import java.io.PrintWriter;
 
-public final class LoggingCounter extends PerformanceCounter {
+public class LoggingCounter extends PerformanceCounter {
     private int size, obj;
     private int totalLength;
     private long time;
-    private final StringBuilder builder;
+    protected final StringBuilder builder;
     private final PrintWriter writer;
 
     public LoggingCounter(PrintWriter writer) {
         this.writer = writer;
         this.builder = new StringBuilder();
+        writer.println(getHeader());
     }
 
     @Override
@@ -21,6 +22,14 @@ public final class LoggingCounter extends PerformanceCounter {
         this.time = System.nanoTime();
     }
 
+    protected String getHeader() {
+        return "n,d,ops,time";
+    }
+
+    protected void populateBuilder() {
+        builder.append(size).append(',').append(obj).append(',').append(totalLength).append(',').append(System.nanoTime() - time);
+    }
+
     @Override
     public void record(int length) {
         totalLength += length;
@@ -28,7 +37,7 @@ public final class LoggingCounter extends PerformanceCounter {
 
     @Override
     public void release() {
-        builder.append(size).append(' ').append(obj).append(' ').append(totalLength).append(' ').append(System.nanoTime() - time);
+        populateBuilder();
         writer.println(builder);
         builder.setLength(0);
         totalLength = 0;
