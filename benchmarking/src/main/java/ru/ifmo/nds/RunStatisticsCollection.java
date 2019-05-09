@@ -1,7 +1,7 @@
 package ru.ifmo.nds;
 
 import ru.ifmo.nds.jfb.JFBDouble;
-import ru.ifmo.nds.jfb.hybrid.ENS;
+import ru.ifmo.nds.jfb.hybrid.NDT;
 import ru.ifmo.nds.util.RedBlackRankQueryStructure;
 import ru.ifmo.nds.util.perfcount.LoggingCounter;
 
@@ -19,9 +19,11 @@ public class RunStatisticsCollection {
 
         int[] iterationSlot = new int[1];
         try (PrintWriter out = new PrintWriter(file)) {
-            NonDominatedSorting sorting = new JFBDouble(new RedBlackRankQueryStructure(n), d, 1,
-                    new ENS(100, 200, () -> new LoggingExtraCounter(out, iterationSlot)));
+//            NonDominatedSorting sorting = new JFBDouble(new RedBlackRankQueryStructure(n), d, 1,
+//                    new ENS(100, 200, () -> new LoggingExtraCounter(out, iterationSlot)));
 
+            NonDominatedSorting sorting = new JFBDouble(new RedBlackRankQueryStructure(n), d, 1,
+                    new NDT(100, 20000, 4, () -> new LoggingExtraCounter(out, iterationSlot)));
             int[][] ranks = new int[nTests][];
             double[][][] tests = new double[nTests][][];
             for (int i = 0; i < nTests; ++i) {
@@ -49,9 +51,9 @@ public class RunStatisticsCollection {
         }
     }
 
-    private static class LoggingExtraCounter extends LoggingCounter {
+    public static class LoggingExtraCounter extends LoggingCounter {
         private int[] auxSlot;
-        private LoggingExtraCounter(PrintWriter writer, int[] auxSlot) {
+        public LoggingExtraCounter(PrintWriter writer, int[] auxSlot) {
             super(writer);
             this.auxSlot = auxSlot;
         }

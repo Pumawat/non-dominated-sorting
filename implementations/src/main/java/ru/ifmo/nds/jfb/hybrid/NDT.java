@@ -5,16 +5,25 @@ import ru.ifmo.nds.jfb.JFBBase;
 import ru.ifmo.nds.ndt.Split;
 import ru.ifmo.nds.ndt.SplitBuilder;
 import ru.ifmo.nds.ndt.TreeRankNode;
+import ru.ifmo.nds.util.perfcount.PerformanceCounter;
+
+import java.util.function.Supplier;
 
 public final class NDT extends HybridAlgorithmWrapper {
     private final int threshold3D;
     private final int thresholdAll;
     private final int treeThreshold;
+    private final ThreadLocal<PerformanceCounter> counterFactory;
+
 
     public NDT(int threshold3D, int thresholdAll, int treeThreshold) {
+        this (threshold3D, thresholdAll, treeThreshold, () -> PerformanceCounter.DUMMY);
+    }
+    public NDT(int threshold3D, int thresholdAll, int treeThreshold, Supplier<PerformanceCounter> counterFactory) {
         this.threshold3D = threshold3D;
         this.thresholdAll = thresholdAll;
         this.treeThreshold = treeThreshold;
+        this.counterFactory = ThreadLocal.withInitial(counterFactory);
     }
 
     @Override
@@ -29,7 +38,7 @@ public final class NDT extends HybridAlgorithmWrapper {
 
     @Override
     public HybridAlgorithmWrapper.Instance create(int[] ranks, int[] indices, double[][] points, double[][] transposedPoints) {
-        return new Instance(ranks, indices, points, transposedPoints, threshold3D, thresholdAll, treeThreshold);
+        return new Instance(ranks, indices, points, transposedPoints, threshold3D, thresholdAll, treeThreshold, counterFactory);
     }
 
     private static final class Instance extends HybridAlgorithmWrapper.Instance {
@@ -45,7 +54,11 @@ public final class NDT extends HybridAlgorithmWrapper {
         private final int thresholdAll;
         private final int threshold;
 
-        private Instance(int[] ranks, int[] indices, double[][] points, double[][] transposedPoints, int threshold3D, int thresholdAll, int treeThreshold) {
+        private final ThreadLocal<PerformanceCounter> counterFactory;
+
+
+        private Instance(int[] ranks, int[] indices, double[][] points, double[][] transposedPoints, int threshold3D,
+                         int thresholdAll, int treeThreshold, ThreadLocal<PerformanceCounter> counterFactory) {
             this.ranks = ranks;
             this.indices = indices;
             this.points = points;
@@ -58,6 +71,8 @@ public final class NDT extends HybridAlgorithmWrapper {
             int maximumDimension = transposedPoints.length;
             this.splitBuilder = new SplitBuilder(transposedPoints, maximumPoints, threshold);
             this.localPoints = new double[maximumPoints][maximumDimension];
+
+            this.counterFactory = counterFactory;
         }
 
         private boolean notHookCondition(int size, int obj) {
@@ -84,7 +99,7 @@ public final class NDT extends HybridAlgorithmWrapper {
             TreeRankNode tree = threshold == 1 ? TreeRankNode.EMPTY_1 : TreeRankNode.EMPTY;
             for (int i = from; i < until; ++i) {
                 int idx = indices[i];
-                ranks[idx] = tree.evaluateRank(localPoints[i], ranks[idx], split, obj);
+                ranks[idx] = tree.evaluateRank(localPoints[i], ranks[idx], split, obj, PerformanceCounter.DUMMY);
 
                 if (ranks[idx] <= maximalMeaningfulRank) {
                     tree = tree.add(localPoints[i], ranks[idx], split, threshold);
@@ -97,6 +112,9 @@ public final class NDT extends HybridAlgorithmWrapper {
 
         @Override
         public int helperBHook(int goodFrom, int goodUntil, int weakFrom, int weakUntil, int obj, int tempFrom, int maximalMeaningfulRank) {
+            PerformanceCounter counter = counterFactory.get();
+            counter.init(goodUntil - goodFrom + weakUntil - weakFrom, obj);
+
             if (notHookCondition(goodUntil - goodFrom + weakUntil - weakFrom, obj)) {
                 return -1;
             }
@@ -119,11 +137,12 @@ public final class NDT extends HybridAlgorithmWrapper {
                     tree = tree.add(localPoints[good], ranks[gi], split, threshold);
                     ++good;
                 }
-                ranks[wi] = tree.evaluateRank(localPoints[weak], ranks[wi], split, obj);
+                ranks[wi] = tree.evaluateRank(localPoints[weak], ranks[wi], split, obj, counter);
                 if (minOverflow > weak && ranks[wi] > maximalMeaningfulRank) {
                     minOverflow = weak;
                 }
             }
+            counter.release();
             return JFBBase.kickOutOverflowedRanks(indices, ranks, maximalMeaningfulRank, minOverflow, weakUntil);
         }
     }

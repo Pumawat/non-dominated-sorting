@@ -3,8 +3,7 @@ package ru.ifmo.nds.ndt;
 import ru.ifmo.nds.NonDominatedSorting;
 import ru.ifmo.nds.util.ArrayHelper;
 import ru.ifmo.nds.util.ArraySorter;
-
-import java.util.Arrays;
+import ru.ifmo.nds.util.perfcount.PerformanceCounter;
 
 public class ENS_NDT_OneTree extends NonDominatedSorting {
     private SplitBuilder splitBuilder;
@@ -61,7 +60,7 @@ public class ENS_NDT_OneTree extends NonDominatedSorting {
         int maxObj = dim - 1;
         for (int i = 1; i < newN; ++i) {
             double[] current = this.points[i];
-            int currRank = tree.evaluateRank(current, 0, split, maxObj);
+            int currRank = tree.evaluateRank(current, 0, split, maxObj, PerformanceCounter.DUMMY);
             this.ranks[i] = currRank;
             if (currRank <= maximalMeaningfulRank) {
                 tree = tree.add(current, currRank, split, threshold);

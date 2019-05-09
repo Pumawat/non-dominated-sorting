@@ -1,11 +1,12 @@
 package ru.ifmo.nds.ndt;
 
 import ru.ifmo.nds.util.DominanceHelper;
+import ru.ifmo.nds.util.perfcount.PerformanceCounter;
 
 public abstract class TreeRankNode {
     public abstract TreeRankNode add(double[] point, int rank, Split split, int splitThreshold);
 
-    public abstract int evaluateRank(double[] point, int rank, Split split, int maxObj);
+    public abstract int evaluateRank(double[] point, int rank, Split split, int maxObj, PerformanceCounter counter);
 
     protected abstract int getMaxRank();
 
@@ -19,7 +20,7 @@ public abstract class TreeRankNode {
         }
 
         @Override
-        public int evaluateRank(double[] point, int rank, Split split, int maxObj) {
+        public int evaluateRank(double[] point, int rank, Split split, int maxObj, PerformanceCounter counter) {
             return rank;
         }
 
@@ -36,7 +37,7 @@ public abstract class TreeRankNode {
         }
 
         @Override
-        public int evaluateRank(double[] point, int rank, Split split, int maxObj) {
+        public int evaluateRank(double[] point, int rank, Split split, int maxObj, PerformanceCounter counter) {
             return rank;
         }
 
@@ -136,18 +137,21 @@ public abstract class TreeRankNode {
         }
 
         @Override
-        public int evaluateRank(double[] point, int rank, Split split, int maxObj) {
+        public int evaluateRank(double[] point, int rank, Split split, int maxObj, PerformanceCounter counter) {
             if (maxRank < rank) {
                 return rank;
             }
             for (int i = size - 1; i >= 0; --i) {
                 if (ranks[i] < rank) {
+                    counter.record(size - 1 - i);
                     return rank;
                 }
                 if (DominanceHelper.strictlyDominatesAssumingLexicographicallySmaller(points[i], point, maxObj)) {
+                    counter.record(size - 1 - i);
                     return ranks[i] + 1;
                 }
             }
+            counter.record(size - 1);
             return rank;
         }
 
@@ -193,7 +197,7 @@ public abstract class TreeRankNode {
         }
 
         @Override
-        public int evaluateRank(double[] point, int rank, Split split, int maxObj) {
+        public int evaluateRank(double[] point, int rank, Split split, int maxObj, PerformanceCounter counter) {
             if (this.rank >= rank && DominanceHelper.strictlyDominatesAssumingLexicographicallySmaller(this.point, point, maxObj)) {
                 return this.rank + 1;
             }
@@ -228,15 +232,17 @@ public abstract class TreeRankNode {
         }
 
         @Override
-        public int evaluateRank(double[] point, int rank, Split split, int maxObj) {
+        public int evaluateRank(double[] point, int rank, Split split, int maxObj, PerformanceCounter counter) {
             if (maxRank < rank) {
                 return rank;
             }
             if (weak != null && point[split.coordinate] >= split.value) {
-                rank = weak.evaluateRank(point, rank, split.weak, maxObj);
+                counter.record(1);
+                rank = weak.evaluateRank(point, rank, split.weak, maxObj, counter);
             }
             if (good != null) {
-                rank = good.evaluateRank(point, rank, split.good, maxObj);
+                counter.record(1);
+                rank = good.evaluateRank(point, rank, split.good, maxObj, counter);
             }
             return rank;
         }
