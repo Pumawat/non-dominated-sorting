@@ -1,7 +1,9 @@
 package ru.ifmo.nds;
 
+import ru.ifmo.nds.jfb.HybridAlgorithmWrapper;
 import ru.ifmo.nds.jfb.JFBDouble;
 import ru.ifmo.nds.jfb.hybrid.NDT;
+import ru.ifmo.nds.jfb.hybrid.ENS;
 import ru.ifmo.nds.util.RedBlackRankQueryStructure;
 import ru.ifmo.nds.util.perfcount.LoggingCounter;
 
@@ -16,14 +18,23 @@ public class RunStatisticsCollection {
         int nTests = Integer.parseInt(args[2]);
         int count = Integer.parseInt(args[3]);
         String file = args[4];
+        String hybrid = args[5];
 
         int[] iterationSlot = new int[1];
         try (PrintWriter out = new PrintWriter(file)) {
-//            NonDominatedSorting sorting = new JFBDouble(new RedBlackRankQueryStructure(n), d, 1,
-//                    new ENS(100, 200, () -> new LoggingExtraCounter(out, iterationSlot)));
-
-            NonDominatedSorting sorting = new JFBDouble(new RedBlackRankQueryStructure(n), d, 1,
-                    new NDT(100, 20000, 4, () -> new LoggingExtraCounter(out, iterationSlot)));
+            HybridAlgorithmWrapper wrapper;
+            switch (hybrid) {
+                case "ens":
+                    wrapper = new ENS(100, 200, () -> new LoggingExtraCounter(out, iterationSlot));
+                    break;
+                case "ndt":
+                    wrapper = new NDT(100, 20000, 4, () -> new LoggingExtraCounter(out, iterationSlot));
+                    break;
+                default:
+                    throw new IllegalArgumentException("The hybrid '" + hybrid
+                            + "' is unknown (shall be either 'ens' or 'ndt')");
+            }
+            NonDominatedSorting sorting = new JFBDouble(new RedBlackRankQueryStructure(n), d, 1, wrapper);
             int[][] ranks = new int[nTests][];
             double[][][] tests = new double[nTests][][];
             for (int i = 0; i < nTests; ++i) {
@@ -51,9 +62,10 @@ public class RunStatisticsCollection {
         }
     }
 
-    public static class LoggingExtraCounter extends LoggingCounter {
+    private static class LoggingExtraCounter extends LoggingCounter {
         private int[] auxSlot;
-        public LoggingExtraCounter(PrintWriter writer, int[] auxSlot) {
+
+        LoggingExtraCounter(PrintWriter writer, int[] auxSlot) {
             super(writer);
             this.auxSlot = auxSlot;
         }
