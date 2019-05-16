@@ -143,15 +143,15 @@ public abstract class TreeRankNode {
             }
             for (int i = size - 1; i >= 0; --i) {
                 if (ranks[i] < rank) {
-                    counter.record(size - 1 - i);
+                    counter.record(size - i);
                     return rank;
                 }
                 if (DominanceHelper.strictlyDominatesAssumingLexicographicallySmaller(points[i], point, maxObj)) {
-                    counter.record(size - 1 - i);
+                    counter.record(size - i);
                     return ranks[i] + 1;
                 }
             }
-            counter.record(size - 1);
+            counter.record(size);
             return rank;
         }
 
@@ -198,6 +198,7 @@ public abstract class TreeRankNode {
 
         @Override
         public int evaluateRank(double[] point, int rank, Split split, int maxObj, PerformanceCounter counter) {
+            counter.record(1);
             if (this.rank >= rank && DominanceHelper.strictlyDominatesAssumingLexicographicallySmaller(this.point, point, maxObj)) {
                 return this.rank + 1;
             }
@@ -236,12 +237,11 @@ public abstract class TreeRankNode {
             if (maxRank < rank) {
                 return rank;
             }
+            counter.record(1);
             if (weak != null && point[split.coordinate] >= split.value) {
-                counter.record(1);
                 rank = weak.evaluateRank(point, rank, split.weak, maxObj, counter);
             }
             if (good != null) {
-                counter.record(1);
                 rank = good.evaluateRank(point, rank, split.good, maxObj, counter);
             }
             return rank;

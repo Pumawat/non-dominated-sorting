@@ -113,13 +113,16 @@ public final class NDT extends HybridAlgorithmWrapper {
         @Override
         public int helperBHook(int goodFrom, int goodUntil, int weakFrom, int weakUntil, int obj, int tempFrom, int maximalMeaningfulRank) {
             PerformanceCounter counter = counterFactory.get();
-            counter.init(goodUntil - goodFrom + weakUntil - weakFrom, obj);
+            int ps = goodUntil - goodFrom + weakUntil - weakFrom;
+            counter.init(ps, obj);
 
-            if (notHookCondition(goodUntil - goodFrom + weakUntil - weakFrom, obj)) {
+            if (notHookCondition(ps, obj)) {
                 return -1;
             }
 
             Split split = splitBuilder.result(goodFrom, goodUntil, indices, obj + 1);
+
+            counter.record((int) (ps * Math.log(ps + 1)));
 
             for (int good = goodFrom; good < goodUntil; ++good) {
                 System.arraycopy(points[indices[good]], 1, localPoints[good], 1, obj);
@@ -127,6 +130,8 @@ public final class NDT extends HybridAlgorithmWrapper {
             for (int weak = weakFrom; weak < weakUntil; ++weak) {
                 System.arraycopy(points[indices[weak]], 1, localPoints[weak], 1, obj);
             }
+
+            counter.record(obj * ps / 3);
 
             int minOverflow = weakUntil;
             TreeRankNode tree = threshold == 1 ? TreeRankNode.EMPTY_1 : TreeRankNode.EMPTY;
