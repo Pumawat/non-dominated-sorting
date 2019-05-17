@@ -9,10 +9,12 @@ public class LoggingCounter extends PerformanceCounter {
     protected final StringBuilder builder;
     private final PrintWriter writer;
 
-    public LoggingCounter(PrintWriter writer) {
+    public LoggingCounter(PrintWriter writer, boolean writeHeader) {
         this.writer = writer;
         this.builder = new StringBuilder();
-        writer.println(getHeader());
+        if (writeHeader) {
+            writer.println(getHeader());
+        }
     }
 
     @Override
@@ -20,6 +22,8 @@ public class LoggingCounter extends PerformanceCounter {
         this.size = size;
         this.obj = obj;
         this.time = System.nanoTime();
+        this.totalLength = 0;
+        builder.setLength(0);
     }
 
     protected String getHeader() {

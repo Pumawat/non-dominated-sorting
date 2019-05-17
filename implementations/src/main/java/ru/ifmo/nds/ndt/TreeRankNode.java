@@ -138,6 +138,7 @@ public abstract class TreeRankNode {
 
         @Override
         public int evaluateRank(double[] point, int rank, Split split, int maxObj, PerformanceCounter counter) {
+            counter.record(1);
             if (maxRank < rank) {
                 return rank;
             }
@@ -234,10 +235,10 @@ public abstract class TreeRankNode {
 
         @Override
         public int evaluateRank(double[] point, int rank, Split split, int maxObj, PerformanceCounter counter) {
+            counter.record(1);
             if (maxRank < rank) {
                 return rank;
             }
-            counter.record(1);
             if (weak != null && point[split.coordinate] >= split.value) {
                 rank = weak.evaluateRank(point, rank, split.weak, maxObj, counter);
             }
